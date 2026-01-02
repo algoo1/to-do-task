@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { TaskList } from './components/TaskList';
 import { BulkTaskManager } from './components/BulkTaskManager';
-import { ActivityFeed } from './components/ActivityFeed';
 import { Login } from './components/Login';
 import { getTasks, addTask, toggleTaskStatus, updateTask, getBulkTasks, initializeDatabase, APP_VERSION } from './services/storage';
 import { checkSession, logout, getCurrentUser } from './services/auth';
@@ -119,11 +118,6 @@ const App: React.FC = () => {
             </div>
             {/* Key is used to force re-animation of chart on data update */}
             <Dashboard key={`dash-${refreshKey}`} />
-            
-            {/* Activity Feed below Dashboard charts */}
-            <div key={`activity-${refreshKey}`}>
-               <ActivityFeed /> 
-            </div>
           </div>
 
           {/* Right Column: Task List & Bulk Tasks */}
