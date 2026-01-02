@@ -13,6 +13,19 @@ export const checkSession = async (): Promise<boolean> => {
     return false;
 };
 
+// Helper to ensure profile exists
+const createProfile = async (user: any, username: string, email: string) => {
+    const { error } = await supabase.from('profiles').insert([
+        { id: user.id, username, email }
+    ]);
+    if (error) {
+        // Ignore duplicate key errors if profile was somehow created by trigger or previous attempt
+        if (!error.message.includes('duplicate key')) {
+            console.error("Profile creation failed:", error);
+        }
+    }
+};
+
 export const register = async (email: string, username: string, password: string): Promise<{ success: boolean; message?: string; autoLogin?: boolean }> => {
     if (!isSupabaseConfigured) {
         return { success: false, message: 'Configuration Error: VITE_SUPABASE_KEY is missing.' };
@@ -30,12 +43,11 @@ export const register = async (email: string, username: string, password: string
     }
 
     // 2. Sign up
-    // Note: To skip email verification, you must disable "Confirm email" in your Supabase Project Settings > Auth > Providers > Email.
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-            data: { username } // Store metadata
+            data: { username }
         }
     });
 
@@ -43,29 +55,38 @@ export const register = async (email: string, username: string, password: string
         return { success: false, message: error.message };
     }
 
-    if (data.user) {
-        // 3. Create Profile Entry
-        const { error: profileError } = await supabase.from('profiles').insert([
-            { id: data.user.id, username, email }
-        ]);
-        
-        if (profileError) {
-             console.error("Profile creation failed:", profileError);
-             // Proceeding because auth user was created
-        }
-
-        // 4. Auto-Login Check
-        // If "Confirm email" is disabled in Supabase, we get a session immediately.
-        if (data.session) {
-            localStorage.setItem(SESSION_KEY, username);
-            return { success: true, autoLogin: true };
-        }
-
-        // If no session, email confirmation is likely still enabled in Supabase settings.
-        return { success: true, autoLogin: false };
+    // 3. Handle Immediate Access
+    // Case A: Supabase returns a session immediately (Confirm Email is disabled)
+    if (data.session) {
+        await createProfile(data.user, username, email);
+        localStorage.setItem(SESSION_KEY, username);
+        return { success: true, autoLogin: true };
     }
 
-    return { success: false, message: 'Registration failed.' };
+    // Case B: Supabase created user but no session (Confirm Email might be enabled)
+    // We attempt to FORCE a login immediately.
+    if (data.user && !data.session) {
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+
+        if (signInData.session) {
+            // It worked! (Maybe auto-confirm timing was just tight)
+            await createProfile(data.user, username, email);
+            localStorage.setItem(SESSION_KEY, username);
+            return { success: true, autoLogin: true };
+        } else {
+            // If sign-in fails here, it's almost certainly because "Confirm Email" is ON in Supabase Dashboard.
+            // We return a failure message instructing the developer/user to fix the config.
+            return { 
+                success: false, 
+                message: 'To allow immediate access, please disable "Confirm Email" in your Supabase Dashboard > Authentication > Providers.' 
+            };
+        }
+    }
+
+    return { success: false, message: 'Registration failed unexpectedly.' };
 };
 
 export const login = async (identifier: string, password: string): Promise<{ success: boolean; message?: string }> => {
@@ -99,6 +120,9 @@ export const login = async (identifier: string, password: string): Promise<{ suc
 
     if (error) {
         console.error("Login Error:", error);
+        if (error.message.includes("Email not confirmed")) {
+             return { success: false, message: 'Please disable "Confirm Email" in Supabase Dashboard to login.' };
+        }
         return { success: false, message: error.message };
     }
 

@@ -25,20 +25,15 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
         try {
             if (isRegistering) {
+                // Try to register and auto-login
                 const result = await register(email, username, password);
-                if (result.success) {
-                    if (result.autoLogin) {
-                        setSuccessMessage('Account created! Logging you in...');
-                        setTimeout(() => {
-                            onLogin();
-                        }, 500);
-                    } else {
-                        // Fallback if Supabase requires email confirmation
-                        setSuccessMessage('Account created. Please check your email or log in.');
-                        setIsRegistering(false);
-                        setPassword(''); 
-                    }
-                } else {
+                
+                if (result.success && result.autoLogin) {
+                    setSuccessMessage('Account created! Entering dashboard...');
+                    setTimeout(() => {
+                        onLogin();
+                    }, 800);
+                } else if (!result.success) {
                     setError(result.message || 'Registration failed.');
                 }
             } else {
@@ -79,7 +74,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         {isRegistering ? 'Create Account' : 'Welcome Back'}
                     </h2>
                     <p className={`${isRegistering ? 'text-slate-300' : 'text-indigo-100'} mt-2`}>
-                        {isRegistering ? 'Sign up to get started immediately' : 'Sign in to TaskFlow Analytics'}
+                        {isRegistering ? 'Get instant access - No email activation required' : 'Sign in to TaskFlow Analytics'}
                     </p>
                 </div>
 
@@ -129,7 +124,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
                                         className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400"
-                                        placeholder="you@example.com"
+                                        placeholder="Any email address"
                                         required={isRegistering}
                                         disabled={isLoading}
                                     />
@@ -185,7 +180,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             disabled={isLoading}
                         >
                             {isLoading ? (
-                                <><Loader2 className="animate-spin mr-2" size={20}/> {isRegistering ? 'Creating Account...' : 'Signing In...'}</>
+                                <><Loader2 className="animate-spin mr-2" size={20}/> {isRegistering ? 'Setting up...' : 'Signing In...'}</>
                             ) : (
                                 <>
                                     <span className="mr-2">{isRegistering ? 'Start Now' : 'Sign In'}</span> 
