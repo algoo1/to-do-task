@@ -2,14 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { DailyPerformance } from '../types';
 import { getPerformanceHistory } from '../services/storage';
-import { getAIInsight } from '../services/gemini';
-import { Sparkles, TrendingUp, TrendingDown, Activity } from 'lucide-react';
-import { Button } from './Button';
+import { Sparkles, TrendingUp, TrendingDown, Activity, Clock } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
   const [data, setData] = useState<DailyPerformance[]>([]);
-  const [insight, setInsight] = useState<string | null>(null);
-  const [loadingInsight, setLoadingInsight] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -18,13 +14,6 @@ export const Dashboard: React.FC = () => {
     };
     loadData();
   }, []);
-
-  const handleGenerateInsight = async () => {
-    setLoadingInsight(true);
-    const text = await getAIInsight(data);
-    setInsight(text);
-    setLoadingInsight(false);
-  };
 
   const currentRate = data.length > 0 ? data[data.length - 1].completionRate : 0;
   const previousRate = data.length > 1 ? data[data.length - 2].completionRate : 0;
@@ -57,33 +46,29 @@ export const Dashboard: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1">Scheduled for today</p>
         </div>
 
-        {/* AI Insight Card */}
-        <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 rounded-xl shadow-md text-white">
-          <div className="flex items-center justify-between mb-3">
+        {/* AI Insight Card - Coming Soon */}
+        <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 rounded-xl shadow-md text-white relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <Sparkles size={64} />
+          </div>
+          
+          <div className="flex items-center justify-between mb-4">
             <h3 className="text-indigo-100 text-sm font-medium flex items-center gap-2">
               <Sparkles size={14} /> AI Insight
             </h3>
+            <span className="bg-white/20 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+               <Clock size={10} /> Coming Soon
+            </span>
           </div>
           
-          {insight ? (
-            <p className="text-sm font-medium leading-relaxed opacity-90 animate-in fade-in duration-500">
-              "{insight}"
+          <div className="flex flex-col items-start gap-2 relative z-10">
+            <p className="text-sm font-medium text-white/90 leading-relaxed">
+              Advanced productivity analysis powered by AI is currently under development.
             </p>
-          ) : (
-            <div className="flex flex-col items-start gap-2">
-              <p className="text-sm text-indigo-100 opacity-80">
-                Get a personalized analysis of your productivity trend.
-              </p>
-              <Button 
-                onClick={handleGenerateInsight} 
-                size="sm" 
-                className="bg-white/20 hover:bg-white/30 text-white border-none mt-2"
-                disabled={loadingInsight}
-              >
-                {loadingInsight ? 'Analyzing...' : 'Generate Insight'}
-              </Button>
-            </div>
-          )}
+            <p className="text-xs text-indigo-200 mt-1">
+              Check back later for personalized recommendations.
+            </p>
+          </div>
         </div>
       </div>
 

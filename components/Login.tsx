@@ -27,9 +27,17 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             if (isRegistering) {
                 const result = await register(email, username, password);
                 if (result.success) {
-                    setSuccessMessage('Account created successfully! Please log in.');
-                    setIsRegistering(false);
-                    setPassword(''); 
+                    if (result.autoLogin) {
+                        setSuccessMessage('Account created! Logging you in...');
+                        setTimeout(() => {
+                            onLogin();
+                        }, 500);
+                    } else {
+                        // Fallback if Supabase requires email confirmation
+                        setSuccessMessage('Account created. Please check your email or log in.');
+                        setIsRegistering(false);
+                        setPassword(''); 
+                    }
                 } else {
                     setError(result.message || 'Registration failed.');
                 }
@@ -71,7 +79,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         {isRegistering ? 'Create Account' : 'Welcome Back'}
                     </h2>
                     <p className={`${isRegistering ? 'text-slate-300' : 'text-indigo-100'} mt-2`}>
-                        {isRegistering ? 'Sign up with your email to get started' : 'Sign in to TaskFlow Analytics'}
+                        {isRegistering ? 'Sign up to get started immediately' : 'Sign in to TaskFlow Analytics'}
                     </p>
                 </div>
 
@@ -180,7 +188,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                 <><Loader2 className="animate-spin mr-2" size={20}/> {isRegistering ? 'Creating Account...' : 'Signing In...'}</>
                             ) : (
                                 <>
-                                    <span className="mr-2">{isRegistering ? 'Register' : 'Sign In'}</span> 
+                                    <span className="mr-2">{isRegistering ? 'Start Now' : 'Sign In'}</span> 
                                     {isRegistering ? <UserPlus size={18} /> : <ArrowRight size={18}/>}
                                 </>
                             )}
@@ -196,7 +204,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
                             disabled={isLoading}
                         >
-                            {isRegistering ? 'Log in here' : 'Register with Email'}
+                            {isRegistering ? 'Log in here' : 'Register for Free'}
                         </button>
                     </div>
                 </div>

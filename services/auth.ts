@@ -6,14 +6,14 @@ export const checkSession = async (): Promise<boolean> => {
     const { data } = await supabase.auth.getSession();
     if (data.session) {
         // Cache user info locally for synchronous UI checks if needed, but primarily rely on Supabase
-        localStorage.setItem(SESSION_KEY, data.session.user.user_metadata.username || data.session.user.email);
+        localStorage.setItem(SESSION_KEY, data.session.user.user_metadata.username || data.session.user.email || 'User');
         return true;
     }
     localStorage.removeItem(SESSION_KEY);
     return false;
 };
 
-export const register = async (email: string, username: string, password: string): Promise<{ success: boolean; message?: string }> => {
+export const register = async (email: string, username: string, password: string): Promise<{ success: boolean; message?: string; autoLogin?: boolean }> => {
     if (!isSupabaseConfigured) {
         return { success: false, message: 'Configuration Error: VITE_SUPABASE_KEY is missing.' };
     }
@@ -30,6 +30,7 @@ export const register = async (email: string, username: string, password: string
     }
 
     // 2. Sign up
+    // Note: To skip email verification, you must disable "Confirm email" in your Supabase Project Settings > Auth > Providers > Email.
     const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -50,9 +51,18 @@ export const register = async (email: string, username: string, password: string
         
         if (profileError) {
              console.error("Profile creation failed:", profileError);
-             return { success: true, message: 'Account created, but profile sync failed.' };
+             // Proceeding because auth user was created
         }
-        return { success: true };
+
+        // 4. Auto-Login Check
+        // If "Confirm email" is disabled in Supabase, we get a session immediately.
+        if (data.session) {
+            localStorage.setItem(SESSION_KEY, username);
+            return { success: true, autoLogin: true };
+        }
+
+        // If no session, email confirmation is likely still enabled in Supabase settings.
+        return { success: true, autoLogin: false };
     }
 
     return { success: false, message: 'Registration failed.' };
@@ -76,8 +86,7 @@ export const login = async (identifier: string, password: string): Promise<{ suc
         if (profile) {
             email = profile.email;
         } else {
-            // Username not found, but we proceed to let Supabase fail auth to avoid enumeration attacks 
-            // or just return invalid creds.
+            // Username not found
             return { success: false, message: 'Invalid credentials.' };
         }
     }
