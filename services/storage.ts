@@ -1,14 +1,13 @@
 import { Task, CompletionRecord, DailyPerformance, Frequency, BulkTask, SubTask, ActivityLog } from '../types';
-import { getCurrentUser } from './auth';
+import { getCurrentUser, isOfflineMode } from './auth';
 import { supabase } from './supabase';
 
-export const APP_VERSION = '1.2';
+export const APP_VERSION = '1.3';
 export const DB_SCHEMA_VERSION = 3;
 
 // --- DATABASE INITIALIZATION ---
 export const initializeDatabase = () => {
-  // Supabase is initialized in services/supabase.ts
-  console.log("Supabase Client Initialized");
+  console.log("Storage Initialized. Offline Mode:", isOfflineMode());
 };
 
 // Helper to generate a date key YYYY-MM-DD
@@ -34,9 +33,36 @@ export const isTaskVisibleOnDate = (task: Task, date: Date): boolean => {
   }
 };
 
+// --- LOCAL STORAGE HELPERS (OFFLINE MODE) ---
+const LS_KEYS = {
+    TASKS: 'tf_local_tasks',
+    COMPLETIONS: 'tf_local_completions',
+    BULK: 'tf_local_bulk',
+    SUBTASKS: 'tf_local_subtasks',
+    ACTIVITY: 'tf_local_activity'
+};
+
+const getLocal = <T>(key: string): T[] => {
+    try {
+        return JSON.parse(localStorage.getItem(key) || '[]');
+    } catch {
+        return [];
+    }
+};
+
+const setLocal = (key: string, data: any[]) => {
+    localStorage.setItem(key, JSON.stringify(data));
+};
+
 // --- ACTIVITY LOGGING ---
 
 export const getActivities = async (): Promise<ActivityLog[]> => {
+  if (isOfflineMode()) {
+      return getLocal<ActivityLog>(LS_KEYS.ACTIVITY).sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      ).slice(0, 50);
+  }
+
   const { data, error } = await supabase
     .from('activity_log')
     .select('*')
@@ -64,6 +90,24 @@ const logActivity = async (
   targetTitle: string
 ) => {
   const user = getCurrentUser() || 'Unknown';
+  const newLog = {
+      id: crypto.randomUUID(),
+      user_name: user,
+      user: user, // local compatibility
+      action,
+      target_type: targetType,
+      targetType, // local compatibility
+      target_title: targetTitle,
+      targetTitle, // local compatibility
+      timestamp: new Date().toISOString()
+  };
+
+  if (isOfflineMode()) {
+      const logs = getLocal<ActivityLog>(LS_KEYS.ACTIVITY);
+      logs.push(newLog as any);
+      setLocal(LS_KEYS.ACTIVITY, logs);
+      return;
+  }
   
   // Fire and forget
   await supabase.from('activity_log').insert([{
@@ -78,6 +122,15 @@ const logActivity = async (
 // --- TASKS ---
 
 export const getTasks = async (): Promise<Task[]> => {
+  if (isOfflineMode()) {
+      const tasks = getLocal<Task>(LS_KEYS.TASKS);
+      const completions = await getCompletions();
+      return tasks.map(t => ({
+          ...t,
+          isDoneToday: checkTaskStatus(t.id, completions)
+      }));
+  }
+
   const { data: tasks, error } = await supabase.from('tasks').select('*');
   if (error) {
       console.error(error);
@@ -102,6 +155,26 @@ export const getTasks = async (): Promise<Task[]> => {
 
 export const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'isDoneToday' | 'createdBy'>): Promise<Task | null> => {
   const user = getCurrentUser() || 'User';
+
+  if (isOfflineMode()) {
+      const newTask: Task = {
+          id: crypto.randomUUID(),
+          title: task.title,
+          description: task.description,
+          frequency: task.frequency,
+          createdAt: new Date().toISOString(),
+          createdBy: user,
+          scheduledDate: task.scheduledDate,
+          weekDay: task.weekDay,
+          monthDay: task.monthDay,
+          isDoneToday: false
+      };
+      const tasks = getLocal<Task>(LS_KEYS.TASKS);
+      tasks.push(newTask);
+      setLocal(LS_KEYS.TASKS, tasks);
+      logActivity('CREATED', 'TASK', task.title);
+      return newTask;
+  }
   
   const { data, error } = await supabase.from('tasks').insert([{
       title: task.title, 
@@ -135,6 +208,17 @@ export const addTask = async (task: Omit<Task, 'id' | 'createdAt' | 'isDoneToday
 };
 
 export const updateTask = async (task: Task): Promise<void> => {
+  if (isOfflineMode()) {
+      const tasks = getLocal<Task>(LS_KEYS.TASKS);
+      const index = tasks.findIndex(t => t.id === task.id);
+      if (index !== -1) {
+          tasks[index] = { ...tasks[index], ...task };
+          setLocal(LS_KEYS.TASKS, tasks);
+          logActivity('UPDATED', 'TASK', task.title);
+      }
+      return;
+  }
+
   await supabase.from('tasks').update({
       title: task.title,
       description: task.description,
@@ -148,6 +232,10 @@ export const updateTask = async (task: Task): Promise<void> => {
 };
 
 export const getCompletions = async (): Promise<CompletionRecord[]> => {
+  if (isOfflineMode()) {
+      return getLocal<CompletionRecord>(LS_KEYS.COMPLETIONS);
+  }
+
   const { data, error } = await supabase.from('completions').select('*');
   if (error) return [];
 
@@ -166,14 +254,42 @@ const checkTaskStatus = (taskId: string, completions: CompletionRecord[]): boole
 };
 
 export const toggleTaskStatus = async (taskId: string): Promise<void> => {
-  // Retrieve task details for log
-  const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single();
-  const taskTitle = task?.title || 'Unknown Task';
-
   const user = getCurrentUser() || 'User';
   const todayKey = getDateKey();
   
-  // Check if completed
+  let taskTitle = 'Unknown Task';
+
+  if (isOfflineMode()) {
+      const tasks = getLocal<Task>(LS_KEYS.TASKS);
+      const task = tasks.find(t => t.id === taskId);
+      taskTitle = task?.title || 'Unknown Task';
+
+      const completions = getLocal<CompletionRecord>(LS_KEYS.COMPLETIONS);
+      const existingIndex = completions.findIndex(c => c.taskId === taskId && c.dateKey === todayKey);
+
+      if (existingIndex !== -1) {
+          // UNDO
+          completions.splice(existingIndex, 1);
+          setLocal(LS_KEYS.COMPLETIONS, completions);
+          logActivity('UNDO', 'TASK', taskTitle);
+      } else {
+          // DO
+          completions.push({
+              taskId,
+              dateKey: todayKey,
+              completedAt: new Date().toISOString(),
+              completedBy: user
+          });
+          setLocal(LS_KEYS.COMPLETIONS, completions);
+          logActivity('COMPLETED', 'TASK', taskTitle);
+      }
+      return;
+  }
+
+  // Supabase implementation
+  const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single();
+  taskTitle = task?.title || 'Unknown Task';
+
   const { data: existing } = await supabase
     .from('completions')
     .select('id')
@@ -240,6 +356,16 @@ export const getPerformanceHistory = async (days: number = 30): Promise<DailyPer
 // --- BULK TASK FUNCTIONS ---
 
 export const getBulkTasks = async (): Promise<BulkTask[]> => {
+  if (isOfflineMode()) {
+      const bulk = getLocal<any>(LS_KEYS.BULK);
+      const subs = getLocal<any>(LS_KEYS.SUBTASKS);
+      
+      return bulk.map((b: any) => ({
+        ...b,
+        subTasks: subs.filter((s: any) => s.bulkTaskId === b.id)
+      }));
+  }
+
   const { data: bulkRows } = await supabase.from('bulk_tasks').select('*');
   const { data: subRows } = await supabase.from('sub_tasks').select('*');
 
@@ -266,6 +392,34 @@ export const getBulkTasks = async (): Promise<BulkTask[]> => {
 export const addBulkTask = async (title: string, subTaskTitles: string[]): Promise<void> => {
   const user = getCurrentUser() || 'User';
 
+  if (isOfflineMode()) {
+      const bulkId = crypto.randomUUID();
+      const newBulk = {
+          id: bulkId,
+          title,
+          createdAt: new Date().toISOString(),
+          createdBy: user
+      };
+      const bulkList = getLocal(LS_KEYS.BULK);
+      bulkList.push(newBulk);
+      setLocal(LS_KEYS.BULK, bulkList);
+
+      const subList = getLocal(LS_KEYS.SUBTASKS);
+      subTaskTitles.forEach(t => {
+          subList.push({
+              id: crypto.randomUUID(),
+              bulkTaskId: bulkId,
+              title: t,
+              isCompleted: false,
+              completedAt: null,
+              completedBy: null
+          });
+      });
+      setLocal(LS_KEYS.SUBTASKS, subList);
+      logActivity('CREATED', 'PROJECT', title);
+      return;
+  }
+
   // 1. Create Bulk Task
   const { data: bulkTask, error } = await supabase.from('bulk_tasks').insert([{
       title,
@@ -290,12 +444,30 @@ export const addBulkTask = async (title: string, subTaskTitles: string[]): Promi
 };
 
 export const toggleBulkSubTask = async (bulkTaskId: string, subTaskId: string): Promise<void> => {
+  const user = getCurrentUser() || 'User';
+
+  if (isOfflineMode()) {
+      const subs = getLocal<any>(LS_KEYS.SUBTASKS);
+      const sub = subs.find(s => s.id === subTaskId);
+      if (sub) {
+          const newStatus = !sub.isCompleted;
+          sub.isCompleted = newStatus;
+          sub.completedAt = newStatus ? new Date().toISOString() : null;
+          sub.completedBy = newStatus ? user : null;
+          setLocal(LS_KEYS.SUBTASKS, subs);
+
+          // Get project title
+          const bulk = getLocal<any>(LS_KEYS.BULK).find(b => b.id === bulkTaskId);
+          logActivity(newStatus ? 'COMPLETED' : 'UNDO', 'PROJECT', `${bulk?.title || 'Project'}: ${sub.title}`);
+      }
+      return;
+  }
+
   // Get current status
   const { data: current } = await supabase.from('sub_tasks').select('*').eq('id', subTaskId).single();
   if (!current) return;
 
   const newStatus = !current.is_completed;
-  const user = getCurrentUser() || 'User';
   const completedAt = newStatus ? new Date().toISOString() : null;
   const completedBy = newStatus ? user : null;
 
@@ -317,12 +489,25 @@ export const toggleBulkSubTask = async (bulkTaskId: string, subTaskId: string): 
 };
 
 export const deleteBulkTask = async (bulkTaskId: string): Promise<void> => {
+  if (isOfflineMode()) {
+      const bulkList = getLocal<any>(LS_KEYS.BULK);
+      const updatedBulk = bulkList.filter(b => b.id !== bulkTaskId);
+      setLocal(LS_KEYS.BULK, updatedBulk);
+      
+      // Cleanup subs
+      const subList = getLocal<any>(LS_KEYS.SUBTASKS);
+      const updatedSubs = subList.filter(s => s.bulkTaskId !== bulkTaskId);
+      setLocal(LS_KEYS.SUBTASKS, updatedSubs);
+
+      logActivity('DELETED', 'PROJECT', 'Project Deleted');
+      return;
+  }
+
   const { data: project } = await supabase.from('bulk_tasks').select('title').eq('id', bulkTaskId).single();
   
-  // Supabase CASCADE delete handles sub_tasks if configured, but let's be safe or assume schema handles it
   await supabase.from('bulk_tasks').delete().eq('id', bulkTaskId);
   
   if (project) {
     logActivity('DELETED', 'PROJECT', project.title);
   }
-}
+};
