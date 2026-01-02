@@ -9,9 +9,10 @@ interface TaskListProps {
   onToggle: (id: string) => void;
   onAdd: (task: Omit<Task, 'id' | 'createdAt' | 'isDoneToday' | 'createdBy'>) => void;
   onUpdate: (task: Task) => void;
+  onDelete: (id: string) => void;
 }
 
-export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAdd, onUpdate }) => {
+export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAdd, onUpdate, onDelete }) => {
   const [viewMode, setViewMode] = useState<'today' | 'all'>('today');
   const [isAdding, setIsAdding] = useState(false);
   
@@ -95,6 +96,13 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAdd, onUp
         monthDay: editFreq === Frequency.MONTHLY ? Number(editMonthDay) : undefined,
     });
     setEditingId(null);
+  };
+
+  const handleDelete = (id: string) => {
+    if (window.confirm("Are you sure you want to remove this task? Past performance history for this task will be removed.")) {
+        onDelete(id);
+        setEditingId(null);
+    }
   };
 
   // Filter Tasks based on View Mode
@@ -278,6 +286,17 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAdd, onUp
                 >
                     {editingId === task.id ? (
                         <div className="w-full space-y-3">
+                             <div className="flex justify-between items-center mb-1">
+                                <h4 className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Editing Task</h4>
+                                <button 
+                                    onClick={() => handleDelete(task.id)}
+                                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"
+                                    title="Delete Task"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                             </div>
+                            
                             <input 
                                 type="text" 
                                 value={editTitle} 
@@ -311,7 +330,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onToggle, onAdd, onUp
                             
                             {renderSchedulingInputs(editFreq, editScheduledDate, setEditScheduledDate, editWeekDay, setEditWeekDay, editMonthDay, setEditMonthDay)}
 
-                            <div className="flex gap-2 justify-end mt-2">
+                            <div className="flex gap-2 justify-end mt-2 pt-2 border-t border-slate-100">
                                 <Button size="sm" variant="ghost" onClick={cancelEditing}>
                                     <X size={14} className="mr-1"/> Cancel
                                 </Button>

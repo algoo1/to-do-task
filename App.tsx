@@ -3,7 +3,7 @@ import { Dashboard } from './components/Dashboard';
 import { TaskList } from './components/TaskList';
 import { BulkTaskManager } from './components/BulkTaskManager';
 import { Login } from './components/Login';
-import { getTasks, addTask, toggleTaskStatus, updateTask, getBulkTasks, initializeDatabase, APP_VERSION } from './services/storage';
+import { getTasks, addTask, toggleTaskStatus, updateTask, deleteTask, getBulkTasks, initializeDatabase, APP_VERSION } from './services/storage';
 import { checkSession, logout, getCurrentUser } from './services/auth';
 import { Task, BulkTask } from './types';
 import { LayoutDashboard, CheckSquare, LogOut, User as UserIcon, Database } from 'lucide-react';
@@ -64,6 +64,11 @@ const App: React.FC = () => {
     await updateTask(task);
     setRefreshKey(prev => prev + 1);
   };
+
+  const handleDeleteTask = async (id: string) => {
+    await deleteTask(id);
+    setRefreshKey(prev => prev + 1);
+  }
 
   const handleBulkUpdate = () => {
     setRefreshKey(prev => prev + 1);
@@ -132,6 +137,7 @@ const App: React.FC = () => {
                     onToggle={handleToggleTask} 
                     onAdd={handleAddTask} 
                     onUpdate={handleUpdateTask}
+                    onDelete={handleDeleteTask}
                 />
             </div>
 

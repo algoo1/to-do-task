@@ -231,6 +231,41 @@ export const updateTask = async (task: Task): Promise<void> => {
   logActivity('UPDATED', 'TASK', task.title);
 };
 
+export const deleteTask = async (taskId: string): Promise<void> => {
+    if (isOfflineMode()) {
+        // 1. Remove Task
+        const tasks = getLocal<Task>(LS_KEYS.TASKS);
+        const taskToDelete = tasks.find(t => t.id === taskId);
+        const updatedTasks = tasks.filter(t => t.id !== taskId);
+        setLocal(LS_KEYS.TASKS, updatedTasks);
+
+        // 2. Remove associated completions (Clean up)
+        const completions = getLocal<CompletionRecord>(LS_KEYS.COMPLETIONS);
+        const updatedCompletions = completions.filter(c => c.taskId !== taskId);
+        setLocal(LS_KEYS.COMPLETIONS, updatedCompletions);
+
+        if (taskToDelete) {
+            logActivity('DELETED', 'TASK', taskToDelete.title);
+        }
+        return;
+    }
+
+    // Supabase (Postgres with Cascade should handle completions, but being explicit is safer)
+    // Fetch title first for logging
+    const { data: task } = await supabase.from('tasks').select('title').eq('id', taskId).single();
+    
+    // Delete task (Foreign keys on 'completions' should be set to ON DELETE CASCADE in SQL, 
+    // but if not, this might fail unless we delete completions first. 
+    // Assuming standard schema setup or strict mode, let's just delete the task.)
+    const { error } = await supabase.from('tasks').delete().eq('id', taskId);
+    
+    if (error) {
+        console.error("Error deleting task:", error);
+    } else if (task) {
+        logActivity('DELETED', 'TASK', task.title);
+    }
+};
+
 export const getCompletions = async (): Promise<CompletionRecord[]> => {
   if (isOfflineMode()) {
       return getLocal<CompletionRecord>(LS_KEYS.COMPLETIONS);
