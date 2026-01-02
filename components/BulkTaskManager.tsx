@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 import { BulkTask } from '../types';
 import { addBulkTask, toggleBulkSubTask, deleteBulkTask } from '../services/storage';
 import { Button } from './Button';
@@ -161,80 +160,41 @@ export const BulkTaskManager: React.FC<BulkTaskManagerProps> = ({ bulkTasks, onU
             const completedCount = task.subTasks.filter(st => st.isCompleted).length;
             const totalCount = task.subTasks.length;
             const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
-
-            const chartData = [
-                { name: 'Completed', value: completedCount, color: '#4f46e5' }, // indigo-600
-                { name: 'Remaining', value: totalCount - completedCount, color: '#e2e8f0' } // slate-200
-            ];
-
             const isExpanded = expandedTaskId === task.id;
 
             return (
                 <div key={task.id} className="transition-colors hover:bg-slate-50/50">
                     <div className="p-6">
-                        <div className="flex flex-col md:flex-row gap-6 items-center">
-                            {/* Chart Section */}
-                            <div className="relative w-32 h-32 flex-shrink-0">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={chartData}
-                                            innerRadius={35}
-                                            outerRadius={50}
-                                            paddingAngle={5}
-                                            dataKey="value"
-                                            stroke="none"
-                                        >
-                                            {chartData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.color} />
-                                            ))}
-                                        </Pie>
-                                        <RechartsTooltip 
-                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                            itemStyle={{ fontSize: '12px' }}
-                                        />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                                <div className="absolute inset-0 flex items-center justify-center flex-col pointer-events-none">
-                                    <span className="text-xl font-bold text-slate-800">{percent}%</span>
-                                    <span className="text-[10px] text-slate-400 uppercase font-medium">Done</span>
-                                </div>
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <h3 className="font-semibold text-lg text-slate-900">{task.title}</h3>
+                                <p className="text-sm text-slate-500">
+                                    {completedCount} of {totalCount} items completed ({percent}%)
+                                </p>
                             </div>
-
-                            {/* Info Section */}
-                            <div className="flex-1 w-full">
-                                <div className="flex justify-between items-start mb-2">
-                                    <div>
-                                        <h3 className="font-semibold text-lg text-slate-900">{task.title}</h3>
-                                        <p className="text-sm text-slate-500">
-                                            {completedCount} of {totalCount} items completed
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => handleDelete(task.id)}
-                                            className="p-2 text-slate-300 hover:text-red-500 transition-colors"
-                                            title="Delete Project"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                        <button 
-                                            onClick={() => toggleExpand(task.id)}
-                                            className="p-2 text-slate-300 hover:text-indigo-600 transition-colors bg-slate-100 rounded-md"
-                                        >
-                                            {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* Progress Bar Fallback / Additional visual */}
-                                <div className="w-full bg-slate-200 rounded-full h-2 mt-2">
-                                    <div 
-                                        className="bg-indigo-600 h-2 rounded-full transition-all duration-500" 
-                                        style={{ width: `${percent}%` }}
-                                    ></div>
-                                </div>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => handleDelete(task.id)}
+                                    className="p-2 text-slate-300 hover:text-red-500 transition-colors"
+                                    title="Delete Project"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                                <button 
+                                    onClick={() => toggleExpand(task.id)}
+                                    className="p-2 text-slate-300 hover:text-indigo-600 transition-colors bg-slate-100 rounded-md"
+                                >
+                                    {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </button>
                             </div>
+                        </div>
+
+                        {/* Simple Linear Progress Bar instead of huge chart */}
+                        <div className="w-full bg-slate-200 rounded-full h-2.5 mt-2">
+                            <div 
+                                className={`h-2.5 rounded-full transition-all duration-500 ${percent === 100 ? 'bg-green-500' : 'bg-indigo-600'}`}
+                                style={{ width: `${percent}%` }}
+                            ></div>
                         </div>
                     </div>
 

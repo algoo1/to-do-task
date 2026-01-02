@@ -1,10 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { DailyPerformance } from '../types';
+import { DailyPerformance, BulkTask } from '../types';
 import { getPerformanceHistory } from '../services/storage';
-import { Sparkles, TrendingUp, TrendingDown, Activity, Clock } from 'lucide-react';
+import { Sparkles, TrendingUp, TrendingDown, Activity, Clock, Briefcase } from 'lucide-react';
+import { ProjectCard } from './ProjectCard';
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+  bulkTasks: BulkTask[];
+}
+
+export const Dashboard: React.FC<DashboardProps> = ({ bulkTasks }) => {
   const [data, setData] = useState<DailyPerformance[]>([]);
 
   useEffect(() => {
@@ -13,14 +18,15 @@ export const Dashboard: React.FC = () => {
         setData(history);
     };
     loadData();
-  }, []);
+  }, [bulkTasks]); // Reload if tasks change
 
   const currentRate = data.length > 0 ? data[data.length - 1].completionRate : 0;
   const previousRate = data.length > 1 ? data[data.length - 2].completionRate : 0;
   const isTrendUp = currentRate >= previousRate;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Stat Card 1 */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
@@ -46,7 +52,7 @@ export const Dashboard: React.FC = () => {
           <p className="text-xs text-slate-400 mt-1">Scheduled for today</p>
         </div>
 
-        {/* AI Insight Card - Coming Soon */}
+        {/* AI Insight Card */}
         <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 rounded-xl shadow-md text-white relative overflow-hidden group">
           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
             <Sparkles size={64} />
@@ -71,6 +77,21 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* NEW SECTION: Department Projects (The "Certificates") */}
+      {bulkTasks.length > 0 && (
+        <div className="space-y-4">
+            <div className="flex items-center gap-2">
+                <Briefcase className="text-indigo-600" size={20}/>
+                <h2 className="text-lg font-semibold text-slate-800">Department Projects</h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {bulkTasks.map(project => (
+                    <ProjectCard key={project.id} project={project} />
+                ))}
+            </div>
+        </div>
+      )}
 
       {/* Main Chart */}
       <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">

@@ -117,7 +117,7 @@ const App: React.FC = () => {
                 <h2 className="text-lg font-semibold text-slate-800">Performance Overview</h2>
             </div>
             {/* Key is used to force re-animation of chart on data update */}
-            <Dashboard key={`dash-${refreshKey}`} />
+            <Dashboard key={`dash-${refreshKey}`} bulkTasks={bulkTasks} />
           </div>
 
           {/* Right Column: Task List & Bulk Tasks */}
