@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 
 const SESSION_KEY = 'taskflow_session_user';
 
@@ -14,6 +14,10 @@ export const checkSession = async (): Promise<boolean> => {
 };
 
 export const register = async (email: string, username: string, password: string): Promise<{ success: boolean; message?: string }> => {
+    if (!isSupabaseConfigured) {
+        return { success: false, message: 'Configuration Error: VITE_SUPABASE_KEY is missing.' };
+    }
+
     // 1. Check if username exists in profiles
     const { data: existingUser } = await supabase
         .from('profiles')
@@ -54,7 +58,11 @@ export const register = async (email: string, username: string, password: string
     return { success: false, message: 'Registration failed.' };
 };
 
-export const login = async (identifier: string, password: string): Promise<boolean> => {
+export const login = async (identifier: string, password: string): Promise<{ success: boolean; message?: string }> => {
+    if (!isSupabaseConfigured) {
+        return { success: false, message: 'Configuration Error: VITE_SUPABASE_KEY is missing.' };
+    }
+
     let email = identifier;
 
     // 1. If identifier is not an email, look it up in profiles
@@ -68,8 +76,9 @@ export const login = async (identifier: string, password: string): Promise<boole
         if (profile) {
             email = profile.email;
         } else {
-            // Username not found
-            return false;
+            // Username not found, but we proceed to let Supabase fail auth to avoid enumeration attacks 
+            // or just return invalid creds.
+            return { success: false, message: 'Invalid credentials.' };
         }
     }
 
@@ -79,9 +88,13 @@ export const login = async (identifier: string, password: string): Promise<boole
         password,
     });
 
-    if (error || !data.session) {
+    if (error) {
         console.error("Login Error:", error);
-        return false;
+        return { success: false, message: error.message };
+    }
+
+    if (!data.session) {
+        return { success: false, message: 'Session could not be established.' };
     }
 
     // Store username for UI
@@ -89,7 +102,7 @@ export const login = async (identifier: string, password: string): Promise<boole
     const username = user.user_metadata.username || user.email;
     localStorage.setItem(SESSION_KEY, username);
 
-    return true;
+    return { success: true };
 };
 
 export const logout = async () => {

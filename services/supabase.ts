@@ -31,7 +31,13 @@ const getEnvVar = (key: string, viteKey: string) => {
 //    (Find this in Supabase Dashboard -> Project Settings -> API)
 // ------------------------------------------------------------------
 
-const SUPABASE_KEY = getEnvVar('SUPABASE_KEY', 'VITE_SUPABASE_KEY');
+let key = getEnvVar('SUPABASE_KEY', 'VITE_SUPABASE_KEY');
+// Strip quotes if they were accidentally added in the env var
+if (key && (key.startsWith('"') || key.startsWith("'"))) {
+  key = key.substring(1, key.length - 1);
+}
+
+const SUPABASE_KEY = key;
 
 if (!SUPABASE_KEY) {
   console.warn(
@@ -39,5 +45,9 @@ if (!SUPABASE_KEY) {
   );
 }
 
+// Export a flag to check if the app is properly configured
+export const isSupabaseConfigured = !!SUPABASE_KEY && SUPABASE_KEY !== 'MISSING_KEY';
+
 // Initialize Supabase
+// We use a fallback so the app doesn't crash on load, but requests will fail with "Invalid API Key"
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY || 'MISSING_KEY');

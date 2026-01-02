@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Button } from './Button';
-import { User, Lock, ArrowRight, Loader2, UserPlus, Mail } from 'lucide-react';
+import { User, Lock, ArrowRight, Loader2, UserPlus, Mail, AlertTriangle } from 'lucide-react';
 import { login, register } from '../services/auth';
+import { isSupabaseConfigured } from '../services/supabase';
 
 interface LoginProps {
     onLogin: () => void;
@@ -29,22 +30,19 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     setSuccessMessage('Account created successfully! Please log in.');
                     setIsRegistering(false);
                     setPassword(''); 
-                    // Keep username/email filled for convenience? 
-                    // For now, let's reset sensitive fields but keep email/user if they want to login
                 } else {
                     setError(result.message || 'Registration failed.');
                 }
             } else {
-                // For login, 'username' state holds the identifier (username or email)
-                const success = await login(username, password);
-                if (success) {
+                const result = await login(username, password);
+                if (result.success) {
                     onLogin();
                 } else {
-                    setError('Invalid credentials.');
+                    setError(result.message || 'Invalid credentials.');
                 }
             }
-        } catch (err) {
-            setError('An error occurred. Please try again.');
+        } catch (err: any) {
+            setError(err.message || 'An error occurred. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -58,6 +56,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         setPassword('');
         setEmail('');
     };
+
+    // Helper to check if the error is configuration related
+    const isConfigError = error.includes('API key') || error.includes('Configuration Error') || !isSupabaseConfigured;
 
     return (
         <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -75,6 +76,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </div>
 
                 <div className="p-8">
+                    {/* Config Error Alert */}
+                    {isConfigError && (
+                        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                             <div className="flex items-center gap-2 font-bold mb-2 text-amber-900">
+                                <AlertTriangle size={16} /> 
+                                Setup Required
+                             </div>
+                             <p className="mb-2">Your Supabase API Key is missing or invalid.</p>
+                             <ul className="list-disc list-inside space-y-1 text-xs opacity-90">
+                                <li>Go to your Vercel Dashboard.</li>
+                                <li>Navigate to <strong>Settings</strong> &gt; <strong>Environment Variables</strong>.</li>
+                                <li>Add Key: <code className="bg-amber-100 px-1 rounded">VITE_SUPABASE_KEY</code></li>
+                                <li>Paste your Supabase <strong>anon/public</strong> key.</li>
+                                <li>Redeploy your project.</li>
+                             </ul>
+                        </div>
+                    )}
+
                     <form onSubmit={handleSubmit} className="space-y-6">
                         {successMessage && (
                             <div className="p-3 bg-green-50 text-green-700 text-sm rounded-lg flex items-center gap-2 border border-green-200 animate-in fade-in slide-in-from-top-1">
@@ -83,7 +102,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             </div>
                         )}
 
-                        {error && (
+                        {error && !isConfigError && (
                             <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2 border border-red-100 animate-in fade-in slide-in-from-top-1">
                                 <div className="w-1.5 h-1.5 rounded-full bg-red-600" />
                                 {error}
@@ -104,7 +123,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                         className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400"
                                         placeholder="you@example.com"
                                         required={isRegistering}
-                                        autoFocus={isRegistering}
+                                        disabled={isLoading}
                                     />
                                 </div>
                             </div>
@@ -125,7 +144,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                     className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400"
                                     placeholder={isRegistering ? "Choose a username" : "Enter username or email"}
                                     required
-                                    autoFocus={!isRegistering}
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
@@ -143,6 +162,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                                     className="block w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400"
                                     placeholder="Enter your password"
                                     required
+                                    disabled={isLoading}
                                 />
                             </div>
                         </div>
@@ -174,6 +194,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         <button 
                             onClick={toggleMode}
                             className="text-sm font-semibold text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
+                            disabled={isLoading}
                         >
                             {isRegistering ? 'Log in here' : 'Register with Email'}
                         </button>
